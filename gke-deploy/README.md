@@ -8,6 +8,10 @@ This is adapted from the following [documentation](https://zero-to-jupyterhub.re
 
     for more info regarding private cluster creation, see this [link](https://cloud.google.com/kubernetes-engine/docs/how-to/private-clusters)
 
+    Also ensure the following tools are installed on your system:    
+    * `kubectl` (version `1.21.0`)
+    * `kustomize` ([link](https://weaveworks-gitops.awsworkshop.io/20_weaveworks_prerequisites/15_install_kustomize.html))
+
 2. For a quick cluster creation, the following files are included:
 
    * `cluster.env`
