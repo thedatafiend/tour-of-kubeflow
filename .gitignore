@@ -35,6 +35,7 @@ MANIFEST
 
 # K8s manifests
 manifests/
+kustomize/
 
 # Installer logs
 pip-log.txt
@@ -130,3 +131,7 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# data
+*.npz
+*.csv
