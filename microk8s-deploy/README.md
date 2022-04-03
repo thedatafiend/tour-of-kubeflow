@@ -62,4 +62,5 @@ juju config dex-auth static-username=admin
 juju config dex-auth static-password=password
 ```
 
-### Accessing the Kubeflow Dashboard
+## Accessing the Kubeflow Dashboard
+Once Kubeflow is fully deployed and you have set up your authentication above, you can access the dashboard by going to the URL we set up in the above step: `http://10.64.140.43.nip.io`
