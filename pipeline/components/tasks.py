@@ -1,12 +1,14 @@
+from cmath import exp
+from os import mkdir
 from typing import NamedTuple
+from typing import Union
 
 
 def prep_data(
     input_path: str,
-    train_dir: str,
-    test_dir: str,
-    target: list = "is_bad",
-    seed: int = 20,
+    bucket: str,
+    target: list="is_bad",
+    seed: int=20,
 ) -> NamedTuple(
     "Outputs",
     [
@@ -24,6 +26,7 @@ def prep_data(
     from sklearn.model_selection import train_test_split
     from sklearn.preprocessing import StandardScaler
     from collections import namedtuple
+    from kf_utils.gcs import upload_blob
 
     pd.options.mode.use_inf_as_na = True
 
@@ -105,17 +108,29 @@ def prep_data(
 
     # Save the data
     logger.info("Saving the data...")
-    xtrain_path = f"{train_dir}/Xtrain.npz"
-    ytrain_path = f"{train_dir}/ytrain.npz"
+    
+    try:
+        mkdir("./data")
+    except FileExistsError:
+        logger.warn("folder already exists.")
 
-    xtest_path = f"{test_dir}/Xtest.npz"
-    ytest_path = f"{test_dir}/ytest.npz"
+    xtrain_path = "data/Xtrain.npz"
+    ytrain_path = "data/ytrain.npz"
+
+    xtest_path = "data/Xtest.npz"
+    ytest_path = "data/ytest.npz"
 
     np.savez_compressed(xtrain_path, X_train)
     np.savez_compressed(ytrain_path, y_train)
     
     np.savez_compressed(xtest_path, X_test)
     np.savez_compressed(ytest_path, y_test)
+
+    upload_blob(bucket, xtrain_path, xtrain_path)
+    upload_blob(bucket, ytrain_path, ytrain_path)
+
+    upload_blob(bucket, xtest_path, xtest_path)
+    upload_blob(bucket, ytest_path, ytest_path)
 
     output = namedtuple(
         "Outputs", ["xtrain_path", "xtest_path", "ytrain_path", "ytest_path"]
@@ -124,18 +139,48 @@ def prep_data(
 
 
 def train(
-    Xtrain_path: str,
+    bucket: str,
+    xtrain_path: str,
     ytrain_path: str,
     model_dir: str,
-    target: list = "is_bad",
+    gcp_project: bool=True,
+    target: list="is_bad",
     seed: int = 20,
 ) -> NamedTuple(
     "Outputs",
     [("model_path", str)],
 ):
-    pass
+    import numpy as np
+    from lightgbm import LGBMClassifier
+    from google.cloud import storage
+    from kf_utils.gcs import download_blob
+
+    if gcp_project:
+        # bucket_name = Xtrain_path.split("/")[2]
+        # Xtrain_blob = "/".join(Xtrain_path.split("/")[3:])
+        # ytrain_blob = "/".join(ytrain_path.split("/")[3:])
+        
+        download_blob(bucket, xtrain_path, xtrain_path)
+        download_blob(bucket, ytrain_path, ytrain_path)
+
+    Xtrain = np.load(xtrain_path)
+    ytrain = np.load(ytrain_path)
+
+    lgb = LGBMClassifier(num_leaves=32, max_depth=5 ,objective="binary", verbosity=3, random_state=seed)
+    lgb.fit(Xtrain, ytrain)
+        
+
+
+
+
 
 
 def eval():
     pass
 
+
+if __name__ == "__main__":
+    prep_data(
+        input_path="gs://amazing-public-data/lending_club/lending_club_data.tsv", 
+        bucket="mw-mlops-example-data",
+    )
