@@ -9,5 +9,5 @@ RUN pip install -r requirements.txt
 # Install local utils
 COPY pyproject.toml pyproject.toml
 COPY setup.cfg setup.cfg
-ADD utils /app/utils
+ADD src /app/src
 RUN pip install .
