@@ -64,7 +64,6 @@ def prep_data(
 
     # Save the data
     logger.info("Saving the data...")
-
     try:
         mkdir("./data")
     except FileExistsError:
