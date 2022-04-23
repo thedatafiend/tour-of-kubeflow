@@ -1,4 +1,14 @@
+"""
+The following functions were taken from:
+https://cloud.google.com/storage/docs/downloading-objects
+https://cloud.google.com/storage/docs/uploading-objects
+"""
 from google.cloud import storage
+import logging
+
+logging.basicConfig()
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 
 def download_blob(bucket_name, source_blob_name, destination_file_name):
@@ -23,7 +33,7 @@ def download_blob(bucket_name, source_blob_name, destination_file_name):
     blob = bucket.blob(source_blob_name)
     blob.download_to_filename(destination_file_name)
 
-    print(
+    logger.info(
         "Downloaded storage object {} from bucket {} to local file {}.".format(
             source_blob_name, bucket_name, destination_file_name
         )
@@ -45,7 +55,7 @@ def upload_blob(bucket_name, source_file_name, destination_blob_name):
 
     blob.upload_from_filename(source_file_name)
 
-    print(
+    logger.info(
         "File {} uploaded to {}.".format(
             source_file_name, destination_blob_name
         )
