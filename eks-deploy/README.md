@@ -4,7 +4,7 @@
 You must have the following installed on your local computer.
 
 * `kustomize` (version `3.2.0`): for working with Kubeflow manifests to install Kubeflow components ([link](https://weaveworks-gitops.awsworkshop.io/20_weaveworks_prerequisites/15_install_kustomize.html)).
-* `kubectl` (version `1.20`): for running install commands, and interacting with running Kubernetes cluster
+* `kubectl` (version `1.20`): for running install commands and interacting with running Kubernetes cluster
 * `eksctl`: for interacting with Amazon EKS clusters ([link](https://weaveworks-gitops.awsworkshop.io/20_weaveworks_prerequisites/11_install_eksctl.html)).
 * `AWS CLI` tool for interacting with aws resources In addition, you will need appropriate permissions to create EKS clusters (and their underlying resources like EC2 nodes, VPCs, and etc.) on an AWS account and region. The following sections assume that you have already authenticated, and have access to an AWS cloud account and its resources ([link](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)).
 
@@ -175,3 +175,21 @@ kubectl port-forward svc/istio-ingressgateway -n istio-system 8080:80
 ```
 
 After this, Kubeflow UI will be accessible at `http://localhost:8080`
+
+## Scaling the Cluster
+You may wish to scale the cluster down, in order to keep from incurring node costs when jobs are not running. Note, that you will not be able to run jobs on the cluster when it is scaled to 0. Best practice is to have at least 3 nodes for running Kubeflow jobs.
+
+```
+eksctl scale nodegroup --cluster kubeflow-deployment --name kubeflow-mng -r ${CLUSTER_REGION} --nodes 0 --nodes-min 0 --nodes-max 1
+```
+
+## Grant Cluster S3 Access
+Once the cluster is setup, let's grant the cluster access to S3 so that our pipeline jobs can use it. There are several ways of setting up access to S3, with varying degrees of security. For this demo we will use a fairly open option. A more sophisticated approach is recommended for production environments.
+
+Sign in to the AWS management console, click on roles, and search for the node instance role that was just created as part of the cluster creation above. The role should have the cluster name in it, similar to this:
+
+`eksctl-kubeflow-deployment-nodegr-NodeInstanceRole-OAUBKKKT5KVB`
+
+Click on the node instance role, and then click on the "Attach policies" button. We will attach a policy that will allow our cluster nodes access to S3 storage. Search for the policy named "AmazonS3FullAccess". Select the policy with the checkbox, and click the "Attach policy" button.
+
+For most applications, you will want stricter access controls, that limit access at the users/groups level, rather than giving access at the kubernetes node level.
