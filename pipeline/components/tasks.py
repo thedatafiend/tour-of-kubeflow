@@ -91,7 +91,7 @@ def train(
     train_path: str,
     model_dir: str,
     gcp_project: bool = True,
-    params: dict = {"objective": "binary", "seed": 20}
+    params: dict = {"objective": "binary", "seed": 20},
 ) -> str:
 
     import lightgbm as lgbm
@@ -148,7 +148,7 @@ def eval(
     bucket: str,
     model_path: str,
     test_path: str,
-    mlpipeline_metrics: OutputPath('Metrics'),
+    mlpipeline_metrics: OutputPath("Metrics"),
     gcp_project: bool = True,
     target: str = "is_bad",
     seed: int = 20,
@@ -168,12 +168,12 @@ def eval(
     # Load the data
     local_data_path = "test.npz"
     logger.info("Loading test data...")
-    
+
     if gcp_project:
         download_blob(bucket, test_path, local_data_path)
     else:
         local_data_path = test_path
-    
+
     X_test = np.load(local_data_path)["xtest"]
     y_test = np.load(local_data_path)["ytest"]
 
@@ -184,7 +184,7 @@ def eval(
         download_blob(bucket, model_path, local_model_path)
     else:
         local_model_path = model_path
-    
+
     model = lgbm.Booster(model_file=local_model_path)
 
     # Evaluate the model
@@ -194,23 +194,41 @@ def eval(
 
     # Log the metrics
     metrics = {
-        "metrics": [{
-            "name": "auc-score",
-            "numberValue": round(auc_metric, 3),
-            "format": "RAW",
-        }]
+        "metrics": [
+            {
+                "name": "auc-score",
+                "numberValue": round(auc_metric, 3),
+                "format": "RAW",
+            }
+        ]
     }
 
     with open(mlpipeline_metrics, "w") as f:
         json.dump(metrics, f)
 
 
+def generate_serve_manifest(
+    model_name: str, storage_uri: str, inference_type: str = "lightgbm"
+) -> dict:
+    manifest = {
+        "apiVersion": "serving.kserve.io/v1beta1",
+        "kind": "InferenceService",
+        "metadata": {"name": model_name},
+        "spec": {"predictor": {inference_type: {"storageUri": storage_uri}}},
+    }
+
+    return manifest
+
+
 if __name__ == "__main__":
-    train(
-        bucket="",
-        train_path="./dtrain.bin",
-        model_dir="",
-        gcp_project=False,
-        target="is_bad",
-        seed=20,
-    )
+    # train(
+    #     bucket="",
+    #     train_path="./dtrain.bin",
+    #     model_dir="",
+    #     gcp_project=False,
+    #     target="is_bad",
+    #     seed=20,
+    # )
+
+    manifest = generate_serve_manifest("test-model", "gs://my-bucket/my-model.bst")
+    print(manifest)
