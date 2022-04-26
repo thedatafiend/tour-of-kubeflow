@@ -8,17 +8,23 @@ def prep_data(
     target: str = "is_bad",
     features: list = ["annual_inc", "revol_util"],
     seed: int = 20,
+    cloud_type: str = "aws",
 ) -> NamedTuple("Outputs", [("train_path", str), ("test_path", str)],):
 
     import logging
     import pandas as pd
     import numpy as np
-    import lightgbm as lgbm
     from sklearn.model_selection import train_test_split
     from sklearn.preprocessing import StandardScaler
     from collections import namedtuple
-    from kf_utils.gcs import upload_blob
     from os import mkdir
+
+    if cloud_type == "aws":
+        from kf_utils.aws import upload_blob
+    elif cloud_type == "gcs":
+        from kf_utils.gcs import upload_blob
+    else:
+        raise Exception("Invalid cloud option")
 
     pd.options.mode.use_inf_as_na = True
 
@@ -69,14 +75,13 @@ def prep_data(
     except FileExistsError:
         logger.warn("folder already exists.")
 
-    train_path_local = "train.bin"
+    train_path_local = "train.npz"
     test_path_local = "test.npz"
 
     train_path = f"data/{train_path_local}"
     test_path = f"data/{test_path_local}"
 
-    dtrain = lgbm.Dataset(X_train, label=y_train)
-    dtrain.save_binary(train_path_local)
+    np.savez_compressed(file=train_path_local, xtrain=X_train, ytrain=y_train)
     np.savez_compressed(file=test_path_local, xtest=X_test, ytest=y_test)
 
     upload_blob(bucket, train_path_local, train_path)
@@ -90,56 +95,52 @@ def train(
     bucket: str,
     train_path: str,
     model_dir: str,
-    gcp_project: bool = True,
+    cloud_type: str = "aws",
     params: dict = {"objective": "binary", "seed": 20},
 ) -> str:
 
-    import lightgbm as lgbm
-    from kf_utils.gcs import download_blob, upload_blob
+    from sklearn.ensemble import RandomForestClassifier
     import logging
     from datetime import datetime
+    import numpy as np
+    from joblib import dump
 
-    logging.basicConfig()
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
+    if cloud_type == "aws":
+        from kf_utils.aws import upload_blob, download_blob
+    elif cloud_type == "gcs":
+        from kf_utils.gcs import upload_blob, download_blob
+    else:
+        raise Exception("Invalid cloud option")
+
+    logger = logging.getLogger("pipeline")
+    logger.setLevel(logging.DEBUG)
 
     # Download the dataset to the container
-    train_path_local = "train.bin"
-
-    if gcp_project:
-        download_blob(bucket, train_path, train_path_local)
-    else:
-        train_path_local = train_path
+    train_path_local = "train.npz"
+    download_blob(bucket, train_path, train_path_local)
 
     # Load the training dataset
     logger.info("Load the dataset...")
-    dtrain = lgbm.Dataset(data=train_path_local)
-    dtrain.construct()
+    X_train = np.load(train_path_local)["xtrain"]
+    y_train = np.load(train_path_local)["ytrain"]
 
     # Set up the model params
     logger.info("Begin training...")
     params = {
-        "num_leaves": 100,
-        "learning_rate": 0.01,
-        "num_iterations": 1000,
-        "max_bin": 255,
-        "objective": "binary",
-        "seed": 20,
-        "verbosity": 3,
+        "n_estimators": 100,
+        "max_depth": 4,
     }
-    model = lgbm.train(
-        params=params,
-        train_set=dtrain,
-    )
+    clf = RandomForestClassifier(**params)
+    clf.fit(X_train, y_train)
 
     # Save the trained model for evaluation
     logger.info("Saving the model...")
-    local_model_path = "./lgbm-model.txt"
-    model.save_model(local_model_path)
-    model_path = f"{model_dir}/lgbm-model-{datetime.now().strftime('%Y%m%d%H%M%S')}.txt"
-
-    if gcp_project:
-        upload_blob(bucket, local_model_path, model_path)
+    local_model_path = "./rfclf-model.joblib"
+    dump(clf, local_model_path)
+    model_path = (
+        f"{model_dir}/rfc-model-{datetime.now().strftime('%Y%m%d%H%M%S')}.joblib"
+    )
+    upload_blob(bucket, local_model_path, model_path)
 
     return model_path
 
@@ -149,17 +150,24 @@ def eval(
     model_path: str,
     test_path: str,
     mlpipeline_metrics: OutputPath("Metrics"),
-    gcp_project: bool = True,
+    cloud_type: str = "aws",
     target: str = "is_bad",
     seed: int = 20,
 ):
 
-    import lightgbm as lgbm
     import numpy as np
     from sklearn.metrics import roc_auc_score
     from kf_utils.gcs import download_blob
     import logging
     import json
+    from joblib import load
+
+    if cloud_type == "aws":
+        from kf_utils.aws import upload_blob, download_blob
+    elif cloud_type == "gcs":
+        from kf_utils.gcs import upload_blob, download_blob
+    else:
+        raise Exception("Invalid cloud option")
 
     logging.basicConfig()
     logger = logging.getLogger()
@@ -168,27 +176,20 @@ def eval(
     # Load the data
     local_data_path = "test.npz"
     logger.info("Loading test data...")
-
-    if gcp_project:
-        download_blob(bucket, test_path, local_data_path)
-    else:
-        local_data_path = test_path
+    download_blob(bucket, test_path, local_data_path)
 
     X_test = np.load(local_data_path)["xtest"]
     y_test = np.load(local_data_path)["ytest"]
 
     # Load model
-    local_model_path = "model.txt"
+    local_model_path = "model.joblib"
     logger.info("Loading the model...")
-    if gcp_project:
-        download_blob(bucket, model_path, local_model_path)
-    else:
-        local_model_path = model_path
+    download_blob(bucket, model_path, local_model_path)
 
-    model = lgbm.Booster(model_file=local_model_path)
+    clf = load(local_model_path)
 
     # Evaluate the model
-    y_preds = model.predict(X_test)
+    y_preds = clf.predict(X_test)
     auc_metric = roc_auc_score(y_test, y_preds)
     logging.info(f"AUC Score {auc_metric}")
 
@@ -221,14 +222,4 @@ def generate_serve_manifest(
 
 
 if __name__ == "__main__":
-    # train(
-    #     bucket="",
-    #     train_path="./dtrain.bin",
-    #     model_dir="",
-    #     gcp_project=False,
-    #     target="is_bad",
-    #     seed=20,
-    # )
-
-    manifest = generate_serve_manifest("test-model", "gs://my-bucket/my-model.bst")
-    print(manifest)
+    pass

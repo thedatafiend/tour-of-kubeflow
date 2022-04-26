@@ -4,3 +4,5 @@ lightgbm==3.2
 scikit-learn==1.0
 gcsfs==2021.11.0
 kfp==1.8
+boto3==1.22
+kubeflow-katib==0.13

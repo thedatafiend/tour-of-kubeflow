@@ -1,5 +1,5 @@
 #!/bin/bash -e
-image_name=gcr.io/my-org/my-image-name
+image_name=gcr.io/my-project/my-image
 image_tag=latest
 full_image_name=${image_name}:${image_tag}
 
