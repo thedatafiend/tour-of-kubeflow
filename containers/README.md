@@ -4,7 +4,7 @@
 Before you can push your image to AWS ECR, you need to first login to the registry via your local Docker runtime. You will need either to create or use an existing ECR registry. In this example, I created a private registry called `kubeflow-demo-v14`.
 
 ```
-domain="<ENTER URI FIELD FROM YOUR ECR REPO>"
+domain="195565468328.dkr.ecr.us-east-1.amazonaws.com/kubeflow-demo-v14"
 aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${domain}
 ```
 
