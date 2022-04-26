@@ -5,29 +5,27 @@ from kfp.components import create_component_from_func
 from components.tasks import prep_data, train, eval
 from kf_utils.client import get_client
 import datetime
-import logging
-
-logger = logging.basicConfig(level=logging.INFO)
 
 NAMESPACE = "kubeflow-user-example-com"
 ENDPOINT = "http://127.0.0.1:8080"
+BASE_IMAGE = "gcr.io/my-project/my-image:latest"
 
 prep_data_func = create_component_from_func(
     prep_data,
     output_component_file="components/prep_data.yaml",
-    base_image="gcr.io/my-org/my-image-name:latest",
+    base_image=BASE_IMAGE,
 )
 
 train_func = create_component_from_func(
     train,
     output_component_file="components/train.yaml",
-    base_image="gcr.io/my-org/my-image-name:latest",
+    base_image=BASE_IMAGE,
 )
 
 eval_func = create_component_from_func(
     eval,
     output_component_file="components/eval.yaml",
-    base_image="gcr.io/my-org/my-image-name:latest",
+    base_image=BASE_IMAGE,
 )
 
 
@@ -70,17 +68,17 @@ def train_pipeline(
 
 arguments = {
     "raw_data": "gs://amazing-public-data/lending_club/lending_club_data.tsv",
-    "bucket": "mw-mlops-example-data",
+    "bucket": "kubeflow-demo-v14",
     "model_dir": "model",
 }
 
 client = get_client(ENDPOINT, NAMESPACE, "user@example.com")
-Compiler().compile(train_pipeline, "pipeline.tar.gz")
+Compiler().compile(train_pipeline, "pipeline.yaml")
 response = client.create_run_from_pipeline_package(
-    "pipeline.tar.gz",
-    run_name=f"lgbm-run-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}",
+    "pipeline.yaml",
+    run_name=f"rfc-run-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}",
     arguments=arguments,
-    experiment_name="default",
+    experiment_name="rfc-test",
     namespace="kubeflow-user-example-com",
 )
-logging.info(response)
+print(response)
